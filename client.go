@@ -101,7 +101,7 @@ func (c *Client) doRequest(ctx context.Context, method, path string, header http
 		c.mutex.RUnlock()
 		return nil, err
 	}
-	if len(c.accessToken) != 0 {
+	if c.accessToken != "" {
 		req.Header.Set("Authorization", "Bearer "+c.accessToken)
 	}
 
@@ -158,7 +158,7 @@ func statusCodeToErr(resp *Response) (body []byte, err error) {
 
 	data, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("body read on HTTP error %d: %v", resp.StatusCode, err)
+		return nil, fmt.Errorf("body read on HTTP error %d: %w", resp.StatusCode, err)
 	}
 
 	errMap := make(map[string]any)
@@ -196,7 +196,7 @@ func (c *Client) getParsedResponse(
 
 func escapeValidatePathSegments(seg ...*string) error {
 	for i := range seg {
-		if seg[i] == nil || len(*seg[i]) == 0 {
+		if seg[i] == nil || *seg[i] == "" {
 			return fmt.Errorf("path segment [%d] is empty", i)
 		}
 		*seg[i] = url.PathEscape(*seg[i])

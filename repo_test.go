@@ -3,7 +3,6 @@ package sourcecraft
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -29,7 +28,7 @@ func TestClient_ListRepoBranches(t *testing.T) {
 			orgSlug:  "test-org",
 			repoSlug: "test-repo",
 			options:  ListRepoBranchesOptions{},
-			serverResponse: func(w http.ResponseWriter, r *http.Request) {
+			serverResponse: func(w http.ResponseWriter, _ *http.Request) {
 				resp := ListRepoBranchesResponse{
 					Branches: []*Branch{
 						{Name: "main", Commit: &Commit{Hash: "abc123"}},
@@ -38,16 +37,18 @@ func TestClient_ListRepoBranches(t *testing.T) {
 					NextPageToken: "token123",
 				}
 				w.WriteHeader(http.StatusOK)
-				json.NewEncoder(w).Encode(resp)
+				require.NoError(t, json.NewEncoder(w).Encode(resp))
 			},
 			wantErr: false,
 			checkResponse: func(t *testing.T, resp *ListRepoBranchesResponse) {
+				t.Helper()
 				assert.Len(t, resp.Branches, 2)
 				assert.Equal(t, "main", resp.Branches[0].Name)
 				assert.Equal(t, "develop", resp.Branches[1].Name)
 				assert.Equal(t, "token123", resp.NextPageToken)
 			},
 			checkRequest: func(t *testing.T, r *http.Request) {
+				t.Helper()
 				assert.Equal(t, "/repos/test-org/test-repo/branches", r.URL.Path)
 				assert.Equal(t, "GET", r.Method)
 			},
@@ -62,16 +63,17 @@ func TestClient_ListRepoBranches(t *testing.T) {
 					PageSize:  10,
 				},
 			},
-			serverResponse: func(w http.ResponseWriter, r *http.Request) {
+			serverResponse: func(w http.ResponseWriter, _ *http.Request) {
 				resp := ListRepoBranchesResponse{
 					Branches:      []*Branch{{Name: "feature-1"}},
 					NextPageToken: "",
 				}
 				w.WriteHeader(http.StatusOK)
-				json.NewEncoder(w).Encode(resp)
+				require.NoError(t, json.NewEncoder(w).Encode(resp))
 			},
 			wantErr: false,
 			checkRequest: func(t *testing.T, r *http.Request) {
+				t.Helper()
 				query := r.URL.Query()
 				assert.Equal(t, "next-page", query.Get("page_token"))
 				assert.Equal(t, "10", query.Get("page_size"))
@@ -86,15 +88,16 @@ func TestClient_ListRepoBranches(t *testing.T) {
 					Filter: "main",
 				},
 			},
-			serverResponse: func(w http.ResponseWriter, r *http.Request) {
+			serverResponse: func(w http.ResponseWriter, _ *http.Request) {
 				resp := ListRepoBranchesResponse{
 					Branches: []*Branch{{Name: "main"}},
 				}
 				w.WriteHeader(http.StatusOK)
-				json.NewEncoder(w).Encode(resp)
+				require.NoError(t, json.NewEncoder(w).Encode(resp))
 			},
 			wantErr: false,
 			checkRequest: func(t *testing.T, r *http.Request) {
+				t.Helper()
 				assert.Equal(t, "main", r.URL.Query().Get("filter"))
 			},
 		},
@@ -103,7 +106,7 @@ func TestClient_ListRepoBranches(t *testing.T) {
 			orgSlug:  "",
 			repoSlug: "test-repo",
 			options:  ListRepoBranchesOptions{},
-			serverResponse: func(w http.ResponseWriter, r *http.Request) {
+			serverResponse: func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(http.StatusOK)
 			},
 			wantErr: true,
@@ -113,7 +116,7 @@ func TestClient_ListRepoBranches(t *testing.T) {
 			orgSlug:  "test-org",
 			repoSlug: "",
 			options:  ListRepoBranchesOptions{},
-			serverResponse: func(w http.ResponseWriter, r *http.Request) {
+			serverResponse: func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(http.StatusOK)
 			},
 			wantErr: true,
@@ -123,13 +126,14 @@ func TestClient_ListRepoBranches(t *testing.T) {
 			orgSlug:  "test org",
 			repoSlug: "test/repo",
 			options:  ListRepoBranchesOptions{},
-			serverResponse: func(w http.ResponseWriter, r *http.Request) {
+			serverResponse: func(w http.ResponseWriter, _ *http.Request) {
 				resp := ListRepoBranchesResponse{Branches: []*Branch{}}
 				w.WriteHeader(http.StatusOK)
-				json.NewEncoder(w).Encode(resp)
+				require.NoError(t, json.NewEncoder(w).Encode(resp))
 			},
 			wantErr: false,
 			checkRequest: func(t *testing.T, r *http.Request) {
+				t.Helper()
 				// URL path encoding: %20 for spaces, %2F for forward slash
 				escapedPath := r.URL.EscapedPath()
 				assert.Contains(t, escapedPath, "test%20org")
@@ -141,9 +145,10 @@ func TestClient_ListRepoBranches(t *testing.T) {
 			orgSlug:  "test-org",
 			repoSlug: "test-repo",
 			options:  ListRepoBranchesOptions{},
-			serverResponse: func(w http.ResponseWriter, r *http.Request) {
+			serverResponse: func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(http.StatusInternalServerError)
-				w.Write([]byte(`{"message":"internal error"}`))
+				_, err := w.Write([]byte(`{"message":"internal error"}`))
+				require.NoError(t, err)
 			},
 			wantErr: true,
 		},
@@ -165,7 +170,7 @@ func TestClient_ListRepoBranches(t *testing.T) {
 			if tt.wantErr {
 				assert.Error(t, err)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.NotNil(t, httpResp)
 				if tt.checkResponse != nil {
 					tt.checkResponse(t, resp)
@@ -193,17 +198,18 @@ func TestClient_GetRepoBranch(t *testing.T) {
 			orgSlug:  "test-org",
 			repoSlug: "test-repo",
 			branch:   "main",
-			serverResponse: func(w http.ResponseWriter, r *http.Request) {
+			serverResponse: func(w http.ResponseWriter, _ *http.Request) {
 				resp := ListRepoBranchesResponse{
 					Branches: []*Branch{
 						{Name: "main", Commit: &Commit{Hash: "abc123"}},
 					},
 				}
 				w.WriteHeader(http.StatusOK)
-				json.NewEncoder(w).Encode(resp)
+				require.NoError(t, json.NewEncoder(w).Encode(resp))
 			},
 			wantErr: false,
 			checkResponse: func(t *testing.T, branch *Branch) {
+				t.Helper()
 				assert.NotNil(t, branch)
 				assert.Equal(t, "main", branch.Name)
 				assert.Equal(t, "abc123", branch.Commit.Hash)
@@ -214,15 +220,16 @@ func TestClient_GetRepoBranch(t *testing.T) {
 			orgSlug:  "test-org",
 			repoSlug: "test-repo",
 			branch:   "nonexistent",
-			serverResponse: func(w http.ResponseWriter, r *http.Request) {
+			serverResponse: func(w http.ResponseWriter, _ *http.Request) {
 				resp := ListRepoBranchesResponse{
 					Branches: []*Branch{},
 				}
 				w.WriteHeader(http.StatusOK)
-				json.NewEncoder(w).Encode(resp)
+				require.NoError(t, json.NewEncoder(w).Encode(resp))
 			},
 			wantErr: false,
 			checkResponse: func(t *testing.T, branch *Branch) {
+				t.Helper()
 				assert.Nil(t, branch)
 			},
 		},
@@ -231,9 +238,10 @@ func TestClient_GetRepoBranch(t *testing.T) {
 			orgSlug:  "test-org",
 			repoSlug: "test-repo",
 			branch:   "main",
-			serverResponse: func(w http.ResponseWriter, r *http.Request) {
+			serverResponse: func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(http.StatusNotFound)
-				w.Write([]byte(`{"message":"repository not found"}`))
+				_, err := w.Write([]byte(`{"message":"repository not found"}`))
+				require.NoError(t, err)
 			},
 			wantErr: true,
 		},
@@ -276,7 +284,7 @@ func TestClient_ListRepoLabels(t *testing.T) {
 			orgSlug:  "test-org",
 			repoSlug: "test-repo",
 			options:  ListLabelsOptions{},
-			serverResponse: func(w http.ResponseWriter, r *http.Request) {
+			serverResponse: func(w http.ResponseWriter, _ *http.Request) {
 				now := time.Now()
 				resp := ListRepoLabelsResponse{
 					Labels: []*Label{
@@ -298,16 +306,18 @@ func TestClient_ListRepoLabels(t *testing.T) {
 					NextPageToken: "next-token",
 				}
 				w.WriteHeader(http.StatusOK)
-				json.NewEncoder(w).Encode(resp)
+				require.NoError(t, json.NewEncoder(w).Encode(resp))
 			},
 			wantErr: false,
 			checkResponse: func(t *testing.T, resp *ListRepoLabelsResponse) {
+				t.Helper()
 				assert.Len(t, resp.Labels, 2)
 				assert.Equal(t, "bug", resp.Labels[0].Name)
 				assert.Equal(t, "feature", resp.Labels[1].Name)
 				assert.Equal(t, "next-token", resp.NextPageToken)
 			},
 			checkRequest: func(t *testing.T, r *http.Request) {
+				t.Helper()
 				assert.Equal(t, "/repos/test-org/test-repo/labels", r.URL.Path)
 			},
 		},
@@ -322,13 +332,14 @@ func TestClient_ListRepoLabels(t *testing.T) {
 					SortBy:   "name",
 				},
 			},
-			serverResponse: func(w http.ResponseWriter, r *http.Request) {
+			serverResponse: func(w http.ResponseWriter, _ *http.Request) {
 				resp := ListRepoLabelsResponse{Labels: []*Label{}}
 				w.WriteHeader(http.StatusOK)
-				json.NewEncoder(w).Encode(resp)
+				require.NoError(t, json.NewEncoder(w).Encode(resp))
 			},
 			wantErr: false,
 			checkRequest: func(t *testing.T, r *http.Request) {
+				t.Helper()
 				query := r.URL.Query()
 				assert.Equal(t, "bug", query.Get("filter"))
 				assert.Equal(t, "name", query.Get("sort_by"))
@@ -339,7 +350,7 @@ func TestClient_ListRepoLabels(t *testing.T) {
 			orgSlug:  "",
 			repoSlug: "test-repo",
 			options:  ListLabelsOptions{},
-			serverResponse: func(w http.ResponseWriter, r *http.Request) {
+			serverResponse: func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(http.StatusOK)
 			},
 			wantErr: true,
@@ -397,7 +408,7 @@ func TestClient_ListRepoFileTree(t *testing.T) {
 			revision: "main",
 			path:     "/src",
 			options:  ListRepoFileTreeOptions{},
-			serverResponse: func(w http.ResponseWriter, r *http.Request) {
+			serverResponse: func(w http.ResponseWriter, _ *http.Request) {
 				resp := ListRepoFileTreeResponse{
 					Trees: []*TreeEntry{
 						{Name: "file1.go", Path: "/src/file1.go", Type: "file"},
@@ -407,16 +418,18 @@ func TestClient_ListRepoFileTree(t *testing.T) {
 					NextPageToken: "",
 				}
 				w.WriteHeader(http.StatusOK)
-				json.NewEncoder(w).Encode(resp)
+				require.NoError(t, json.NewEncoder(w).Encode(resp))
 			},
 			wantErr: false,
 			checkResponse: func(t *testing.T, resp *ListRepoFileTreeResponse) {
+				t.Helper()
 				assert.Len(t, resp.Trees, 3)
 				assert.Equal(t, "file1.go", resp.Trees[0].Name)
 				assert.Equal(t, "file", resp.Trees[0].Type)
 				assert.Equal(t, "directory", resp.Trees[2].Type)
 			},
 			checkRequest: func(t *testing.T, r *http.Request) {
+				t.Helper()
 				assert.Equal(t, "/repos/test-org/test-repo/trees", r.URL.Path)
 				query := r.URL.Query()
 				assert.Equal(t, "main", query.Get("revision"))
@@ -432,13 +445,14 @@ func TestClient_ListRepoFileTree(t *testing.T) {
 			options: ListRepoFileTreeOptions{
 				Recursive: &recursiveTrue,
 			},
-			serverResponse: func(w http.ResponseWriter, r *http.Request) {
+			serverResponse: func(w http.ResponseWriter, _ *http.Request) {
 				resp := ListRepoFileTreeResponse{Trees: []*TreeEntry{}}
 				w.WriteHeader(http.StatusOK)
-				json.NewEncoder(w).Encode(resp)
+				require.NoError(t, json.NewEncoder(w).Encode(resp))
 			},
 			wantErr: false,
 			checkRequest: func(t *testing.T, r *http.Request) {
+				t.Helper()
 				assert.Equal(t, "true", r.URL.Query().Get("recursive"))
 			},
 		},
@@ -451,13 +465,14 @@ func TestClient_ListRepoFileTree(t *testing.T) {
 			options: ListRepoFileTreeOptions{
 				Recursive: &recursiveFalse,
 			},
-			serverResponse: func(w http.ResponseWriter, r *http.Request) {
+			serverResponse: func(w http.ResponseWriter, _ *http.Request) {
 				resp := ListRepoFileTreeResponse{Trees: []*TreeEntry{}}
 				w.WriteHeader(http.StatusOK)
-				json.NewEncoder(w).Encode(resp)
+				require.NoError(t, json.NewEncoder(w).Encode(resp))
 			},
 			wantErr: false,
 			checkRequest: func(t *testing.T, r *http.Request) {
+				t.Helper()
 				assert.Equal(t, "false", r.URL.Query().Get("recursive"))
 			},
 		},
@@ -473,13 +488,14 @@ func TestClient_ListRepoFileTree(t *testing.T) {
 					PageSize:  50,
 				},
 			},
-			serverResponse: func(w http.ResponseWriter, r *http.Request) {
+			serverResponse: func(w http.ResponseWriter, _ *http.Request) {
 				resp := ListRepoFileTreeResponse{Trees: []*TreeEntry{}}
 				w.WriteHeader(http.StatusOK)
-				json.NewEncoder(w).Encode(resp)
+				require.NoError(t, json.NewEncoder(w).Encode(resp))
 			},
 			wantErr: false,
 			checkRequest: func(t *testing.T, r *http.Request) {
+				t.Helper()
 				query := r.URL.Query()
 				assert.Equal(t, "token123", query.Get("page_token"))
 				assert.Equal(t, "50", query.Get("page_size"))
@@ -492,7 +508,7 @@ func TestClient_ListRepoFileTree(t *testing.T) {
 			revision: "main",
 			path:     "/",
 			options:  ListRepoFileTreeOptions{},
-			serverResponse: func(w http.ResponseWriter, r *http.Request) {
+			serverResponse: func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(http.StatusOK)
 			},
 			wantErr: true,
@@ -543,7 +559,7 @@ func TestClient_ListRepoPullRequests(t *testing.T) {
 			orgSlug:  "test-org",
 			repoSlug: "test-repo",
 			options:  ListRepoPullRequestsOptions{},
-			serverResponse: func(w http.ResponseWriter, r *http.Request) {
+			serverResponse: func(w http.ResponseWriter, _ *http.Request) {
 				now := time.Now()
 				resp := ListRepoPullRequestsResponse{
 					PullRequests: []*PullRequest{
@@ -569,10 +585,11 @@ func TestClient_ListRepoPullRequests(t *testing.T) {
 					NextPageToken: "next-pr-token",
 				}
 				w.WriteHeader(http.StatusOK)
-				json.NewEncoder(w).Encode(resp)
+				require.NoError(t, json.NewEncoder(w).Encode(resp))
 			},
 			wantErr: false,
 			checkResponse: func(t *testing.T, resp *ListRepoPullRequestsResponse) {
+				t.Helper()
 				assert.Len(t, resp.PullRequests, 2)
 				assert.Equal(t, "Add feature", resp.PullRequests[0].Title)
 				assert.Equal(t, "open", resp.PullRequests[0].Status)
@@ -581,6 +598,7 @@ func TestClient_ListRepoPullRequests(t *testing.T) {
 				assert.Equal(t, "next-pr-token", resp.NextPageToken)
 			},
 			checkRequest: func(t *testing.T, r *http.Request) {
+				t.Helper()
 				assert.Equal(t, "/repos/test-org/test-repo/pulls", r.URL.Path)
 				assert.Equal(t, "GET", r.Method)
 			},
@@ -595,13 +613,14 @@ func TestClient_ListRepoPullRequests(t *testing.T) {
 					SortBy: "created_at",
 				},
 			},
-			serverResponse: func(w http.ResponseWriter, r *http.Request) {
+			serverResponse: func(w http.ResponseWriter, _ *http.Request) {
 				resp := ListRepoPullRequestsResponse{PullRequests: []*PullRequest{}}
 				w.WriteHeader(http.StatusOK)
-				json.NewEncoder(w).Encode(resp)
+				require.NoError(t, json.NewEncoder(w).Encode(resp))
 			},
 			wantErr: false,
 			checkRequest: func(t *testing.T, r *http.Request) {
+				t.Helper()
 				query := r.URL.Query()
 				assert.Equal(t, "open", query.Get("filter"))
 				assert.Equal(t, "created_at", query.Get("sort_by"))
@@ -617,13 +636,14 @@ func TestClient_ListRepoPullRequests(t *testing.T) {
 					PageSize:  20,
 				},
 			},
-			serverResponse: func(w http.ResponseWriter, r *http.Request) {
+			serverResponse: func(w http.ResponseWriter, _ *http.Request) {
 				resp := ListRepoPullRequestsResponse{PullRequests: []*PullRequest{}}
 				w.WriteHeader(http.StatusOK)
-				json.NewEncoder(w).Encode(resp)
+				require.NoError(t, json.NewEncoder(w).Encode(resp))
 			},
 			wantErr: false,
 			checkRequest: func(t *testing.T, r *http.Request) {
+				t.Helper()
 				query := r.URL.Query()
 				assert.Equal(t, "pr-page-2", query.Get("page_token"))
 				assert.Equal(t, "20", query.Get("page_size"))
@@ -634,7 +654,7 @@ func TestClient_ListRepoPullRequests(t *testing.T) {
 			orgSlug:  "test-org",
 			repoSlug: "",
 			options:  ListRepoPullRequestsOptions{},
-			serverResponse: func(w http.ResponseWriter, r *http.Request) {
+			serverResponse: func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(http.StatusOK)
 			},
 			wantErr: true,
@@ -644,9 +664,10 @@ func TestClient_ListRepoPullRequests(t *testing.T) {
 			orgSlug:  "test-org",
 			repoSlug: "test-repo",
 			options:  ListRepoPullRequestsOptions{},
-			serverResponse: func(w http.ResponseWriter, r *http.Request) {
+			serverResponse: func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(http.StatusForbidden)
-				w.Write([]byte(`{"message":"access denied"}`))
+				_, err := w.Write([]byte(`{"message":"access denied"}`))
+				require.NoError(t, err)
 			},
 			wantErr: true,
 		},
@@ -740,9 +761,9 @@ func TestListRepoFileTreeOptions_getURLQuery(t *testing.T) {
 			query := tt.options.getURLQuery()
 			for key, expectedValue := range tt.expected {
 				if expectedValue == "" {
-					assert.Empty(t, query.Get(key), fmt.Sprintf("Expected %s to be empty", key))
+					assert.Empty(t, query.Get(key), "Expected %s to be empty", key)
 				} else {
-					assert.Equal(t, expectedValue, query.Get(key), fmt.Sprintf("Mismatch for key %s", key))
+					assert.Equal(t, expectedValue, query.Get(key), "Mismatch for key %s", key)
 				}
 			}
 		})

@@ -3,6 +3,8 @@ package sourcecraft
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -59,10 +61,10 @@ func TestNewClient(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			client, err := NewClient(tt.url, tt.options...)
 			if tt.wantErr {
-				assert.Error(t, err)
+				require.Error(t, err)
 				assert.Nil(t, client)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.NotNil(t, client)
 				assert.NotNil(t, client.client)
 				// Verify URL has trailing slash removed
@@ -134,9 +136,10 @@ func TestWithHTTPClient(t *testing.T) {
 
 func TestWithHTTPClient_Integration(t *testing.T) {
 	// Test that the client with WithHTTPClient can make actual requests
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"status":"ok"}`))
+		_, err := w.Write([]byte(`{"status":"ok"}`))
+		require.NoError(t, err)
 	}))
 	defer server.Close()
 
@@ -160,7 +163,7 @@ func TestWithHTTPClient_Integration(t *testing.T) {
 			require.NoError(t, err)
 
 			resp, err := client.doRequest(context.Background(), "GET", "/test", nil, nil)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.NotNil(t, resp)
 			assert.Equal(t, http.StatusOK, resp.StatusCode)
 		})
@@ -182,12 +185,14 @@ func TestClient_doRequest(t *testing.T) {
 			method: "GET",
 			path:   "/test",
 			token:  "",
-			serverResponse: func(w http.ResponseWriter, r *http.Request) {
+			serverResponse: func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(http.StatusOK)
-				w.Write([]byte(`{"status":"ok"}`))
+				_, err := w.Write([]byte(`{"status":"ok"}`))
+				require.NoError(t, err)
 			},
 			wantErr: false,
 			checkRequest: func(t *testing.T, r *http.Request) {
+				t.Helper()
 				assert.Equal(t, "GET", r.Method)
 				assert.Equal(t, "/test", r.URL.Path)
 			},
@@ -197,11 +202,12 @@ func TestClient_doRequest(t *testing.T) {
 			method: "GET",
 			path:   "/protected",
 			token:  "secret-token",
-			serverResponse: func(w http.ResponseWriter, r *http.Request) {
+			serverResponse: func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(http.StatusOK)
 			},
 			wantErr: false,
 			checkRequest: func(t *testing.T, r *http.Request) {
+				t.Helper()
 				assert.Equal(t, "Bearer secret-token", r.Header.Get("Authorization"))
 			},
 		},
@@ -210,11 +216,12 @@ func TestClient_doRequest(t *testing.T) {
 			method: "POST",
 			path:   "/create",
 			token:  "",
-			serverResponse: func(w http.ResponseWriter, r *http.Request) {
+			serverResponse: func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(http.StatusCreated)
 			},
 			wantErr: false,
 			checkRequest: func(t *testing.T, r *http.Request) {
+				t.Helper()
 				assert.Equal(t, "POST", r.Method)
 			},
 		},
@@ -236,7 +243,7 @@ func TestClient_doRequest(t *testing.T) {
 			if tt.wantErr {
 				assert.Error(t, err)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.NotNil(t, resp)
 				if tt.checkRequest != nil {
 					tt.checkRequest(t, capturedRequest)
@@ -255,34 +262,38 @@ func TestClient_getResponse(t *testing.T) {
 	}{
 		{
 			name: "SuccessfulResponse",
-			serverResponse: func(w http.ResponseWriter, r *http.Request) {
+			serverResponse: func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(http.StatusOK)
-				w.Write([]byte(`{"message":"success"}`))
+				_, err := w.Write([]byte(`{"message":"success"}`))
+				require.NoError(t, err)
 			},
 			wantErr:  false,
 			wantData: `{"message":"success"}`,
 		},
 		{
 			name: "ErrorResponse400",
-			serverResponse: func(w http.ResponseWriter, r *http.Request) {
+			serverResponse: func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(http.StatusBadRequest)
-				w.Write([]byte(`{"message":"bad request"}`))
+				_, err := w.Write([]byte(`{"message":"bad request"}`))
+				require.NoError(t, err)
 			},
 			wantErr: true,
 		},
 		{
 			name: "ErrorResponse404",
-			serverResponse: func(w http.ResponseWriter, r *http.Request) {
+			serverResponse: func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(http.StatusNotFound)
-				w.Write([]byte(`{"message":"not found"}`))
+				_, err := w.Write([]byte(`{"message":"not found"}`))
+				require.NoError(t, err)
 			},
 			wantErr: true,
 		},
 		{
 			name: "ErrorResponse500",
-			serverResponse: func(w http.ResponseWriter, r *http.Request) {
+			serverResponse: func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(http.StatusInternalServerError)
-				w.Write([]byte(`{"message":"internal server error"}`))
+				_, err := w.Write([]byte(`{"message":"internal server error"}`))
+				require.NoError(t, err)
 			},
 			wantErr: true,
 		},
@@ -300,7 +311,7 @@ func TestClient_getResponse(t *testing.T) {
 			if tt.wantErr {
 				assert.Error(t, err)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.NotNil(t, resp)
 				assert.Equal(t, tt.wantData, string(data))
 			}
@@ -316,32 +327,52 @@ func TestClient_getParsedResponse(t *testing.T) {
 
 	tests := []struct {
 		name           string
+		method         string
+		header         http.Header
+		body           io.Reader
 		serverResponse func(w http.ResponseWriter, r *http.Request)
 		wantErr        bool
 		expectedObj    TestResponse
 	}{
 		{
-			name: "SuccessfulParsing",
-			serverResponse: func(w http.ResponseWriter, r *http.Request) {
+			name:   "SuccessfulParsing",
+			method: "GET",
+			serverResponse: func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(http.StatusOK)
-				json.NewEncoder(w).Encode(TestResponse{Message: "test", Count: 42})
+				require.NoError(t, json.NewEncoder(w).Encode(TestResponse{Message: "test", Count: 42}))
 			},
 			wantErr:     false,
 			expectedObj: TestResponse{Message: "test", Count: 42},
 		},
 		{
-			name: "InvalidJSON",
-			serverResponse: func(w http.ResponseWriter, r *http.Request) {
+			name:   "InvalidJSON",
+			method: "GET",
+			serverResponse: func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(http.StatusOK)
-				w.Write([]byte(`{invalid json}`))
+				_, err := w.Write([]byte(`{invalid json}`))
+				require.NoError(t, err)
 			},
 			wantErr: true,
 		},
 		{
-			name: "ErrorResponse",
-			serverResponse: func(w http.ResponseWriter, r *http.Request) {
+			name:   "ErrorResponse",
+			method: "GET",
+			serverResponse: func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(http.StatusBadRequest)
-				w.Write([]byte(`{"message":"error"}`))
+				_, err := w.Write([]byte(`{"message":"error"}`))
+				require.NoError(t, err)
+			},
+			wantErr: true,
+		},
+		{
+			name:   "ErrorResponseOnPost",
+			method: "POST",
+			header: http.Header{"key": []string{"value"}},
+			body:   strings.NewReader("body"),
+			serverResponse: func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusBadRequest)
+				_, err := w.Write([]byte(`{"message":"error"}`))
+				require.NoError(t, err)
 			},
 			wantErr: true,
 		},
@@ -356,11 +387,11 @@ func TestClient_getParsedResponse(t *testing.T) {
 			require.NoError(t, err)
 
 			var result TestResponse
-			resp, err := client.getParsedResponse(context.Background(), "GET", "/test", nil, nil, &result)
+			resp, err := client.getParsedResponse(context.Background(), tt.method, "/test", tt.header, tt.body, &result)
 			if tt.wantErr {
 				assert.Error(t, err)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.NotNil(t, resp)
 				assert.Equal(t, tt.expectedObj, result)
 			}
@@ -420,13 +451,14 @@ func TestStatusCodeToErr(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(tt.statusCode)
-				w.Write([]byte(tt.body))
+				_, err := w.Write([]byte(tt.body))
+				require.NoError(t, err)
 			}))
 			defer server.Close()
 
-			req, err := http.NewRequest("GET", server.URL, nil)
+			req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, server.URL, http.NoBody)
 			require.NoError(t, err)
 
 			resp, err := http.DefaultClient.Do(req)
@@ -436,7 +468,7 @@ func TestStatusCodeToErr(t *testing.T) {
 			_, err = statusCodeToErr(response)
 
 			if tt.wantErr {
-				assert.Error(t, err)
+				require.Error(t, err)
 				if tt.errContains != "" {
 					assert.Contains(t, err.Error(), tt.errContains)
 				}
@@ -500,9 +532,10 @@ func TestEscapeValidatePathSegments(t *testing.T) {
 }
 
 func TestClient_ConcurrentAccess(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"status":"ok"}`))
+		_, err := w.Write([]byte(`{"status":"ok"}`))
+		require.NoError(t, err)
 	}))
 	defer server.Close()
 
@@ -530,7 +563,7 @@ func TestClient_ConcurrentAccess(t *testing.T) {
 }
 
 func TestClient_ContextCancellation(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		time.Sleep(100 * time.Millisecond)
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -543,7 +576,7 @@ func TestClient_ContextCancellation(t *testing.T) {
 	defer cancel()
 
 	_, err = client.doRequest(ctx, "GET", "/test", nil, nil)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "context deadline exceeded")
 }
 
@@ -564,7 +597,7 @@ func TestClient_CustomHeaders(t *testing.T) {
 	}
 
 	_, err = client.doRequest(context.Background(), "GET", "/test", customHeaders, nil)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, "custom-value", capturedHeaders.Get("X-Custom-Header"))
 	assert.Equal(t, "application/json", capturedHeaders.Get("Content-Type"))
 }
@@ -572,4 +605,122 @@ func TestClient_CustomHeaders(t *testing.T) {
 // Helper function to create string pointers
 func strPtr(s string) *string {
 	return &s
+}
+
+type errorOnCloseReader struct {
+	data     string
+	pos      int
+	readErr  error
+	closeErr error
+}
+
+func (r *errorOnCloseReader) Read(p []byte) (int, error) {
+	if r.readErr != nil {
+		return 0, r.readErr
+	}
+	if r.pos >= len(r.data) {
+		return 0, io.EOF
+	}
+	n := copy(p, r.data[r.pos:])
+	r.pos += n
+	return n, nil
+}
+
+func (r *errorOnCloseReader) Close() error {
+	return r.closeErr
+}
+
+type mockRoundTripper struct {
+	resp *http.Response
+}
+
+func (m *mockRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	m.resp.Request = req
+	return m.resp, nil
+}
+
+func TestNewClient_WithFailingOption(t *testing.T) {
+	failingOption := func(_ *Client) error {
+		return errors.New("option initialization failed")
+	}
+	client, err := NewClient("https://api.example.com", failingOption)
+	require.Error(t, err)
+	assert.Nil(t, client)
+	assert.Contains(t, err.Error(), "option initialization failed")
+}
+
+func TestClient_doRequest_InvalidMethod(t *testing.T) {
+	client, err := NewClient("https://api.example.com")
+	require.NoError(t, err)
+
+	_, err = client.doRequest(context.Background(), "INVALID METHOD", "/test", nil, nil)
+	require.Error(t, err)
+}
+
+func TestClient_getResponse_BodyCloseError(t *testing.T) {
+	closeErr := errors.New("body close failed")
+	body := &errorOnCloseReader{
+		data:     `{"status":"ok"}`,
+		closeErr: closeErr,
+	}
+	transport := &mockRoundTripper{
+		resp: &http.Response{
+			StatusCode: http.StatusOK,
+			Status:     "200 OK",
+			Body:       body,
+			Header:     http.Header{},
+		},
+	}
+	client, err := NewClient("https://api.example.com")
+	require.NoError(t, err)
+	client.SetHTTPClient(&http.Client{Transport: transport})
+
+	data, _, err := client.getResponse(context.Background(), "GET", "/test", nil, nil)
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"status":"ok"}`, string(data))
+}
+
+func TestStatusCodeToErr_BodyCloseError(t *testing.T) {
+	closeErr := errors.New("close failed")
+	body := &errorOnCloseReader{
+		data:     `{"message":"bad request"}`,
+		closeErr: closeErr,
+	}
+	req, reqErr := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://example.com/test", http.NoBody)
+	require.NoError(t, reqErr)
+
+	resp := &Response{
+		Response: &http.Response{
+			StatusCode: http.StatusBadRequest,
+			Status:     "400 Bad Request",
+			Body:       body,
+			Request:    req,
+		},
+	}
+
+	_, err := statusCodeToErr(resp)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "bad request")
+}
+
+func TestStatusCodeToErr_BodyReadError(t *testing.T) {
+	readErr := errors.New("read failed")
+	body := &errorOnCloseReader{readErr: readErr}
+
+	req, reqErr := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://example.com/test", http.NoBody)
+	require.NoError(t, reqErr)
+
+	resp := &Response{
+		Response: &http.Response{
+			StatusCode: http.StatusInternalServerError,
+			Status:     "500 Internal Server Error",
+			Body:       body,
+			Request:    req,
+		},
+	}
+
+	_, err := statusCodeToErr(resp)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "body read on HTTP error 500")
+	assert.Contains(t, err.Error(), "read failed")
 }

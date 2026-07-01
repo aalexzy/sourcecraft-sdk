@@ -26,7 +26,7 @@ func TestClient_ListOrgRepos(t *testing.T) {
 			name:    "SuccessfulListRepos",
 			orgSlug: "test-org",
 			options: ListOrgReposOptions{},
-			serverResponse: func(w http.ResponseWriter, r *http.Request) {
+			serverResponse: func(w http.ResponseWriter, _ *http.Request) {
 				now := time.Now()
 				resp := ListOrgReposResponse{
 					Repositories: []*Repository{
@@ -62,10 +62,11 @@ func TestClient_ListOrgRepos(t *testing.T) {
 					NextPageToken: "next-repos-token",
 				}
 				w.WriteHeader(http.StatusOK)
-				json.NewEncoder(w).Encode(resp)
+				require.NoError(t, json.NewEncoder(w).Encode(resp))
 			},
 			wantErr: false,
 			checkResponse: func(t *testing.T, resp *ListOrgReposResponse) {
+				t.Helper()
 				assert.Len(t, resp.Repositories, 2)
 				assert.Equal(t, "test-repo-1", resp.Repositories[0].Name)
 				assert.Equal(t, "main", resp.Repositories[0].DefaultBranch)
@@ -78,6 +79,7 @@ func TestClient_ListOrgRepos(t *testing.T) {
 				assert.Equal(t, "next-repos-token", resp.NextPageToken)
 			},
 			checkRequest: func(t *testing.T, r *http.Request) {
+				t.Helper()
 				assert.Equal(t, "/orgs/test-org/repos", r.URL.Path)
 				assert.Equal(t, "GET", r.Method)
 			},
@@ -91,16 +93,17 @@ func TestClient_ListOrgRepos(t *testing.T) {
 					PageSize:  25,
 				},
 			},
-			serverResponse: func(w http.ResponseWriter, r *http.Request) {
+			serverResponse: func(w http.ResponseWriter, _ *http.Request) {
 				resp := ListOrgReposResponse{
 					Repositories:  []*Repository{},
 					NextPageToken: "",
 				}
 				w.WriteHeader(http.StatusOK)
-				json.NewEncoder(w).Encode(resp)
+				require.NoError(t, json.NewEncoder(w).Encode(resp))
 			},
 			wantErr: false,
 			checkRequest: func(t *testing.T, r *http.Request) {
+				t.Helper()
 				query := r.URL.Query()
 				assert.Equal(t, "page-token-123", query.Get("page_token"))
 				assert.Equal(t, "25", query.Get("page_size"))
@@ -114,7 +117,7 @@ func TestClient_ListOrgRepos(t *testing.T) {
 					Filter: "test",
 				},
 			},
-			serverResponse: func(w http.ResponseWriter, r *http.Request) {
+			serverResponse: func(w http.ResponseWriter, _ *http.Request) {
 				resp := ListOrgReposResponse{
 					Repositories: []*Repository{
 						{
@@ -125,13 +128,15 @@ func TestClient_ListOrgRepos(t *testing.T) {
 					},
 				}
 				w.WriteHeader(http.StatusOK)
-				json.NewEncoder(w).Encode(resp)
+				require.NoError(t, json.NewEncoder(w).Encode(resp))
 			},
 			wantErr: false,
 			checkRequest: func(t *testing.T, r *http.Request) {
+				t.Helper()
 				assert.Equal(t, "test", r.URL.Query().Get("filter"))
 			},
 			checkResponse: func(t *testing.T, resp *ListOrgReposResponse) {
+				t.Helper()
 				assert.Len(t, resp.Repositories, 1)
 				assert.Equal(t, "test-repo", resp.Repositories[0].Name)
 			},
@@ -144,13 +149,14 @@ func TestClient_ListOrgRepos(t *testing.T) {
 					SortBy: "name",
 				},
 			},
-			serverResponse: func(w http.ResponseWriter, r *http.Request) {
+			serverResponse: func(w http.ResponseWriter, _ *http.Request) {
 				resp := ListOrgReposResponse{Repositories: []*Repository{}}
 				w.WriteHeader(http.StatusOK)
-				json.NewEncoder(w).Encode(resp)
+				require.NoError(t, json.NewEncoder(w).Encode(resp))
 			},
 			wantErr: false,
 			checkRequest: func(t *testing.T, r *http.Request) {
+				t.Helper()
 				assert.Equal(t, "name", r.URL.Query().Get("sort_by"))
 			},
 		},
@@ -165,13 +171,14 @@ func TestClient_ListOrgRepos(t *testing.T) {
 					SortBy:    "updated_at",
 				},
 			},
-			serverResponse: func(w http.ResponseWriter, r *http.Request) {
+			serverResponse: func(w http.ResponseWriter, _ *http.Request) {
 				resp := ListOrgReposResponse{Repositories: []*Repository{}}
 				w.WriteHeader(http.StatusOK)
-				json.NewEncoder(w).Encode(resp)
+				require.NoError(t, json.NewEncoder(w).Encode(resp))
 			},
 			wantErr: false,
 			checkRequest: func(t *testing.T, r *http.Request) {
+				t.Helper()
 				query := r.URL.Query()
 				assert.Equal(t, "token", query.Get("page_token"))
 				assert.Equal(t, "10", query.Get("page_size"))
@@ -183,7 +190,7 @@ func TestClient_ListOrgRepos(t *testing.T) {
 			name:    "EmptyOrgSlug",
 			orgSlug: "",
 			options: ListOrgReposOptions{},
-			serverResponse: func(w http.ResponseWriter, r *http.Request) {
+			serverResponse: func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(http.StatusOK)
 			},
 			wantErr: true,
@@ -192,13 +199,14 @@ func TestClient_ListOrgRepos(t *testing.T) {
 			name:    "SpecialCharactersInOrgSlug",
 			orgSlug: "test org",
 			options: ListOrgReposOptions{},
-			serverResponse: func(w http.ResponseWriter, r *http.Request) {
+			serverResponse: func(w http.ResponseWriter, _ *http.Request) {
 				resp := ListOrgReposResponse{Repositories: []*Repository{}}
 				w.WriteHeader(http.StatusOK)
-				json.NewEncoder(w).Encode(resp)
+				require.NoError(t, json.NewEncoder(w).Encode(resp))
 			},
 			wantErr: false,
 			checkRequest: func(t *testing.T, r *http.Request) {
+				t.Helper()
 				// URL path encoding uses %20 for spaces
 				escapedPath := r.URL.EscapedPath()
 				assert.Contains(t, escapedPath, "test%20org")
@@ -208,9 +216,10 @@ func TestClient_ListOrgRepos(t *testing.T) {
 			name:    "ServerError404",
 			orgSlug: "nonexistent-org",
 			options: ListOrgReposOptions{},
-			serverResponse: func(w http.ResponseWriter, r *http.Request) {
+			serverResponse: func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(http.StatusNotFound)
-				w.Write([]byte(`{"message":"organization not found"}`))
+				_, err := w.Write([]byte(`{"message":"organization not found"}`))
+				require.NoError(t, err)
 			},
 			wantErr: true,
 		},
@@ -218,9 +227,10 @@ func TestClient_ListOrgRepos(t *testing.T) {
 			name:    "ServerError403",
 			orgSlug: "private-org",
 			options: ListOrgReposOptions{},
-			serverResponse: func(w http.ResponseWriter, r *http.Request) {
+			serverResponse: func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(http.StatusForbidden)
-				w.Write([]byte(`{"message":"access denied"}`))
+				_, err := w.Write([]byte(`{"message":"access denied"}`))
+				require.NoError(t, err)
 			},
 			wantErr: true,
 		},
@@ -228,9 +238,10 @@ func TestClient_ListOrgRepos(t *testing.T) {
 			name:    "ServerError500",
 			orgSlug: "test-org",
 			options: ListOrgReposOptions{},
-			serverResponse: func(w http.ResponseWriter, r *http.Request) {
+			serverResponse: func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(http.StatusInternalServerError)
-				w.Write([]byte(`{"message":"internal server error"}`))
+				_, err := w.Write([]byte(`{"message":"internal server error"}`))
+				require.NoError(t, err)
 			},
 			wantErr: true,
 		},
@@ -238,16 +249,17 @@ func TestClient_ListOrgRepos(t *testing.T) {
 			name:    "EmptyRepositoriesList",
 			orgSlug: "empty-org",
 			options: ListOrgReposOptions{},
-			serverResponse: func(w http.ResponseWriter, r *http.Request) {
+			serverResponse: func(w http.ResponseWriter, _ *http.Request) {
 				resp := ListOrgReposResponse{
 					Repositories:  []*Repository{},
 					NextPageToken: "",
 				}
 				w.WriteHeader(http.StatusOK)
-				json.NewEncoder(w).Encode(resp)
+				require.NoError(t, json.NewEncoder(w).Encode(resp))
 			},
 			wantErr: false,
 			checkResponse: func(t *testing.T, resp *ListOrgReposResponse) {
+				t.Helper()
 				assert.Empty(t, resp.Repositories)
 				assert.Empty(t, resp.NextPageToken)
 			},
@@ -256,7 +268,7 @@ func TestClient_ListOrgRepos(t *testing.T) {
 			name:    "RepositoryWithCompleteMetadata",
 			orgSlug: "test-org",
 			options: ListOrgReposOptions{},
-			serverResponse: func(w http.ResponseWriter, r *http.Request) {
+			serverResponse: func(w http.ResponseWriter, _ *http.Request) {
 				now := time.Now()
 				resp := ListOrgReposResponse{
 					Repositories: []*Repository{
@@ -269,18 +281,18 @@ func TestClient_ListOrgRepos(t *testing.T) {
 							Visibility:    "public",
 							IsEmpty:       false,
 							TemplateType:  "standard",
-							WebUrl:        "https://example.com/test-org/complete-repo",
+							WebURL:        "https://example.com/test-org/complete-repo",
 							LastUpdated:   &now,
 							Organization: &OrganizationEmbedded{
 								Id:   "org1",
 								Slug: "test-org",
 							},
 							Logo: &Image{
-								Url: "https://example.com/logo.png",
+								URL: "https://example.com/logo.png",
 							},
-							CloneUrl: &CloneURL{
-								Https: "https://example.com/test-org/complete-repo.git",
-								Ssh:   "git@example.com:test-org/complete-repo.git",
+							CloneURL: &CloneURL{
+								HTTPS: "https://example.com/test-org/complete-repo.git",
+								SSH:   "git@example.com:test-org/complete-repo.git",
 							},
 							Language: &Language{
 								Name:  "Go",
@@ -302,17 +314,18 @@ func TestClient_ListOrgRepos(t *testing.T) {
 					NextPageToken: "",
 				}
 				w.WriteHeader(http.StatusOK)
-				json.NewEncoder(w).Encode(resp)
+				require.NoError(t, json.NewEncoder(w).Encode(resp))
 			},
 			wantErr: false,
 			checkResponse: func(t *testing.T, resp *ListOrgReposResponse) {
+				t.Helper()
 				assert.Len(t, resp.Repositories, 1)
 				repo := resp.Repositories[0]
 				assert.Equal(t, "complete-repo", repo.Name)
 				assert.NotNil(t, repo.Logo)
-				assert.Equal(t, "https://example.com/logo.png", repo.Logo.Url)
-				assert.NotNil(t, repo.CloneUrl)
-				assert.Equal(t, "https://example.com/test-org/complete-repo.git", repo.CloneUrl.Https)
+				assert.Equal(t, "https://example.com/logo.png", repo.Logo.URL)
+				assert.NotNil(t, repo.CloneURL)
+				assert.Equal(t, "https://example.com/test-org/complete-repo.git", repo.CloneURL.HTTPS)
 				assert.NotNil(t, repo.Language)
 				assert.Equal(t, "Go", repo.Language.Name)
 				assert.NotNil(t, repo.Counters)
@@ -324,7 +337,7 @@ func TestClient_ListOrgRepos(t *testing.T) {
 			name:    "RepositoryWithParent",
 			orgSlug: "test-org",
 			options: ListOrgReposOptions{},
-			serverResponse: func(w http.ResponseWriter, r *http.Request) {
+			serverResponse: func(w http.ResponseWriter, _ *http.Request) {
 				resp := ListOrgReposResponse{
 					Repositories: []*Repository{
 						{
@@ -339,10 +352,11 @@ func TestClient_ListOrgRepos(t *testing.T) {
 					},
 				}
 				w.WriteHeader(http.StatusOK)
-				json.NewEncoder(w).Encode(resp)
+				require.NoError(t, json.NewEncoder(w).Encode(resp))
 			},
 			wantErr: false,
 			checkResponse: func(t *testing.T, resp *ListOrgReposResponse) {
+				t.Helper()
 				assert.Len(t, resp.Repositories, 1)
 				assert.NotNil(t, resp.Repositories[0].Parent)
 				assert.Equal(t, "parent-repo", resp.Repositories[0].Parent.Slug)
@@ -366,7 +380,7 @@ func TestClient_ListOrgRepos(t *testing.T) {
 			if tt.wantErr {
 				assert.Error(t, err)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.NotNil(t, httpResp)
 				if tt.checkResponse != nil {
 					tt.checkResponse(t, resp)
@@ -385,7 +399,7 @@ func TestClient_ListOrgRepos_WithAuthentication(t *testing.T) {
 		capturedAuthHeader = r.Header.Get("Authorization")
 		resp := ListOrgReposResponse{Repositories: []*Repository{}}
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(resp)
+		require.NoError(t, json.NewEncoder(w).Encode(resp))
 	}))
 	defer server.Close()
 
@@ -394,12 +408,12 @@ func TestClient_ListOrgRepos_WithAuthentication(t *testing.T) {
 	require.NoError(t, err)
 
 	_, _, err = client.ListOrgRepos(context.Background(), "test-org", ListOrgReposOptions{})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, "Bearer "+token, capturedAuthHeader)
 }
 
 func TestClient_ListOrgRepos_ContextCancellation(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		time.Sleep(100 * time.Millisecond)
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -412,14 +426,15 @@ func TestClient_ListOrgRepos_ContextCancellation(t *testing.T) {
 	defer cancel()
 
 	_, _, err = client.ListOrgRepos(ctx, "test-org", ListOrgReposOptions{})
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "context deadline exceeded")
 }
 
 func TestClient_ListOrgRepos_InvalidJSON(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{invalid json response}`))
+		_, err := w.Write([]byte(`{invalid json response}`))
+		require.NoError(t, err)
 	}))
 	defer server.Close()
 
@@ -432,7 +447,7 @@ func TestClient_ListOrgRepos_InvalidJSON(t *testing.T) {
 
 func TestClient_ListOrgRepos_Pagination(t *testing.T) {
 	pageCount := 0
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		pageCount++
 		var resp ListOrgReposResponse
 
@@ -454,7 +469,7 @@ func TestClient_ListOrgRepos_Pagination(t *testing.T) {
 		}
 
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(resp)
+		require.NoError(t, json.NewEncoder(w).Encode(resp))
 	}))
 	defer server.Close()
 
@@ -463,7 +478,7 @@ func TestClient_ListOrgRepos_Pagination(t *testing.T) {
 
 	// First page
 	resp1, _, err := client.ListOrgRepos(context.Background(), "test-org", ListOrgReposOptions{})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Len(t, resp1.Repositories, 2)
 	assert.Equal(t, "page2", resp1.NextPageToken)
 
@@ -471,20 +486,20 @@ func TestClient_ListOrgRepos_Pagination(t *testing.T) {
 	resp2, _, err := client.ListOrgRepos(context.Background(), "test-org", ListOrgReposOptions{
 		ListOptions: ListOptions{PageToken: resp1.NextPageToken},
 	})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Len(t, resp2.Repositories, 1)
 	assert.Empty(t, resp2.NextPageToken)
 }
 
 func TestClient_ListOrgRepos_ConcurrentRequests(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		resp := ListOrgReposResponse{
 			Repositories: []*Repository{
 				{Id: "repo1", Name: "test-repo", Slug: "test-repo"},
 			},
 		}
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(resp)
+		require.NoError(t, json.NewEncoder(w).Encode(resp))
 	}))
 	defer server.Close()
 

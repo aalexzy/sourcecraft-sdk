@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"strconv"
 )
 
 // ListRepoBranchesOptions specifies options for listing repository branches.
@@ -73,7 +74,7 @@ type ListRepoFileTreeOptions struct {
 func (o ListRepoFileTreeOptions) getURLQuery() url.Values {
 	query := o.ListOptions.getURLQuery()
 	if o.Recursive != nil {
-		query.Add("recursive", fmt.Sprintf("%t", *o.Recursive))
+		query.Add("recursive", strconv.FormatBool(*o.Recursive))
 	}
 	return query
 }

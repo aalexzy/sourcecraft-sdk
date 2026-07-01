@@ -56,10 +56,10 @@ type Repository struct {
 	Visibility string `json:"visibility"`
 	// Logo is the repository's logo image, if set.
 	Logo *Image `json:"logo"`
-	// CloneUrl contains the URLs for cloning the repository.
-	CloneUrl *CloneURL `json:"clone_url"`
-	// WebUrl is the URL to view the repository in a web browser.
-	WebUrl string `json:"web_url"`
+	// CloneURL contains the URLs for cloning the repository.
+	CloneURL *CloneURL `json:"clone_url"`
+	// WebURL is the URL to view the repository in a web browser.
+	WebURL string `json:"web_url"`
 	// Links contains additional related links for the repository.
 	Links []*Link `json:"links"`
 	// Counters contains various statistics about the repository.
@@ -90,16 +90,16 @@ type RepositoryEmbedded struct {
 
 // Image represents an image with its URL.
 type Image struct {
-	// Url is the URL where the image can be accessed.
-	Url string `json:"url"`
+	// URL is the URL where the image can be accessed.
+	URL string `json:"url"`
 }
 
 // CloneURL contains the URLs for cloning a repository via different protocols.
 type CloneURL struct {
-	// Https is the HTTPS clone URL.
-	Https string `json:"https"`
-	// Ssh is the SSH clone URL.
-	Ssh string `json:"ssh"`
+	// HTTPS is the HTTPS clone URL.
+	HTTPS string `json:"https"`
+	// SSH is the SSH clone URL.
+	SSH string `json:"ssh"`
 }
 
 // Link represents a related link with its type.
@@ -452,4 +452,56 @@ type PullRequestReviewDecisionEventPaylaod struct {
 	User *UserEmbedded `json:"user"`
 	// Decision is the review decision (ship, sticky_ship, block, abstain, or null for withdrawal).
 	Decision string `json:"decision"`
+}
+
+// PullRequestEventAggregate is the normalized payload returned by Parse when using PullRequestAggregate.
+// It provides direct access to the common fields shared by all pull request events.
+// RawEvent holds the original specific payload (e.g. PullRequestMergeEventPayload) for clients
+// that need event-specific fields beyond the common ones.
+type PullRequestEventAggregate struct {
+	// Header is the event header with common fields.
+	Header *EventHeader
+	// Repository is the repository where the pull request is located.
+	Repository *Repository
+	// PullRequest is the pull request.
+	PullRequest *PullRequest
+	// EventType is the specific pull request event type (e.g. PullRequestCreateEvent).
+	EventType Event
+	// RawEvent holds the original specific event payload for detailed processing.
+	// Type-assert against the concrete payload type corresponding to EventType.
+	RawEvent any
+}
+
+type UserProfile struct {
+	ID              string         `json:"id"`
+	DisplayName     string         `json:"display_name"`
+	UserName        string         `json:"username"`
+	Bio             string         `json:"bio"`
+	Location        *Location      `json:"location"`
+	Timezone        *Timezone      `json:"timezone"`
+	Workplace       *Workplace     `json:"workplace"`
+	Links           []*Link        `json:"links"`
+	Status          *ProfileStatus `json:"status"`
+	Avatar          *Image         `json:"avatar"`
+	BackgroundImage *Image         `json:"background_image"`
+	Visibility      string         `json:"visibility"`
+}
+
+type Location struct {
+	Country string `json:"country"`
+	City    string `json:"city"`
+}
+
+type Timezone struct {
+	IanaTimezone string `json:"iana_timezone"`
+}
+
+type Workplace struct {
+	Company  string `json:"company"`
+	Position string `json:"position"`
+}
+
+type ProfileStatus struct {
+	Message string `json:"message"`
+	Emoji   string `json:"emoji"`
 }

@@ -1,8 +1,8 @@
 package sourcecraft
 
 import (
-	"fmt"
 	"net/url"
+	"strconv"
 )
 
 // ListOptions contains pagination and filtering options for list operations.
@@ -27,23 +27,23 @@ type ListOptions struct {
 
 func (o ListOptions) getURLQuery() url.Values {
 	query := make(url.Values)
-	if len(o.PageToken) > 0 {
-		query.Add("page_token", fmt.Sprintf("%s", o.PageToken))
+	if o.PageToken != "" {
+		query.Add("page_token", o.PageToken)
 	}
 	if o.PageSize > 0 {
-		query.Add("page_size", fmt.Sprintf("%d", o.PageSize))
+		query.Add("page_size", strconv.Itoa(o.PageSize))
 	}
-	if len(o.Filter) > 0 {
+	if o.Filter != "" {
 		query.Add("filter", o.Filter)
 	}
-	if len(o.SortBy) > 0 {
+	if o.SortBy != "" {
 		query.Add("sort_by", o.SortBy)
 	}
 	return query
 }
 
 func (o *ListOptions) setDefaults() {
-	if len(o.PageToken) == 0 {
+	if o.PageToken == "" {
 		o.PageSize = 0
 		return
 	}

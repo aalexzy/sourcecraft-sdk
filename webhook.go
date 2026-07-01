@@ -121,7 +121,7 @@ func New(options ...WebhookOption) (*Webhook, error) {
 // (e.g., PullRequestAggregate) to match multiple events at once.
 // Returns the parsed payload as an interface{} that can be type-asserted to the specific payload type,
 // or an error if validation or parsing fails.
-func (hook Webhook) Parse(r *http.Request, events ...EventMatcher) (interface{}, error) {
+func (hook Webhook) Parse(r *http.Request, events ...EventMatcher) (any, error) {
 	defer func() {
 		_, _ = io.Copy(io.Discard, r.Body)
 		_ = r.Body.Close()
@@ -158,10 +158,21 @@ func (hook Webhook) Parse(r *http.Request, events ...EventMatcher) (interface{},
 		return nil, ErrParsingPayload
 	}
 
-	if len(hook.secret) > 0 {
+	if hook.secret != "" {
 		err := hook.verifySignature(r, payload)
 		if err != nil {
 			return nil, err
+		}
+	}
+
+	// Determine if any of the requested matchers is an aggregate.
+	// When an aggregate is used, PR events are returned as PullRequestEventAggregate
+	// instead of the specific concrete payload types.
+	usesAggregate := false
+	for _, m := range events {
+		if _, ok := m.(EventAggregate); ok {
+			usesAggregate = true
+			break
 		}
 	}
 
@@ -177,38 +188,65 @@ func (hook Webhook) Parse(r *http.Request, events ...EventMatcher) (interface{},
 	case PullRequestCreateEvent:
 		var pl PullRequestCreateEventPayload
 		err = json.Unmarshal([]byte(payload), &pl)
+		if usesAggregate {
+			return PullRequestEventAggregate{pl.Header, pl.Repository, pl.PullRequest, PullRequestCreateEvent, pl}, err
+		}
 		return pl, err
 	case PullRequestUpdateEvent:
 		var pl PullRequestUpdateEventPayload
 		err = json.Unmarshal([]byte(payload), &pl)
+		if usesAggregate {
+			return PullRequestEventAggregate{pl.Header, pl.Repository, pl.PullRequest, PullRequestUpdateEvent, pl}, err
+		}
 		return pl, err
 	case PullRequestPublishEvent:
 		var pl PullRequestPublishEventPayload
 		err = json.Unmarshal([]byte(payload), &pl)
+		if usesAggregate {
+			return PullRequestEventAggregate{pl.Header, pl.Repository, pl.PullRequest, PullRequestPublishEvent, pl}, err
+		}
 		return pl, err
 	case PullRequestRefreshEvent:
 		var pl PullRequestRefreshEventPayload
 		err = json.Unmarshal([]byte(payload), &pl)
+		if usesAggregate {
+			return PullRequestEventAggregate{pl.Header, pl.Repository, pl.PullRequest, PullRequestRefreshEvent, pl}, err
+		}
 		return pl, err
 	case PullRequestMergeFailureEvent:
 		var pl PullRequestMergeFailureEventPayload
 		err = json.Unmarshal([]byte(payload), &pl)
+		if usesAggregate {
+			return PullRequestEventAggregate{pl.Header, pl.Repository, pl.PullRequest, PullRequestMergeFailureEvent, pl}, err
+		}
 		return pl, err
 	case PullRequestMergeEvent:
 		var pl PullRequestMergeEventPayload
 		err = json.Unmarshal([]byte(payload), &pl)
+		if usesAggregate {
+			return PullRequestEventAggregate{pl.Header, pl.Repository, pl.PullRequest, PullRequestMergeEvent, pl}, err
+		}
 		return pl, err
 	case PullRequestNewIterationEvent:
 		var pl PullRequestNewIterationEventPayload
 		err = json.Unmarshal([]byte(payload), &pl)
+		if usesAggregate {
+			return PullRequestEventAggregate{pl.Header, pl.Repository, pl.PullRequest, PullRequestNewIterationEvent, pl}, err
+		}
 		return pl, err
 	case PullRequestReviewAssignmentEvent:
 		var pl PullRequestReviewAssignmentEventPayload
 		err = json.Unmarshal([]byte(payload), &pl)
+		if usesAggregate {
+			return PullRequestEventAggregate{pl.Header, pl.Repository, pl.PullRequest, PullRequestReviewAssignmentEvent, pl}, err
+		}
 		return pl, err
 	case PullRequestReviewDecisionEvent:
 		var pl PullRequestReviewDecisionEventPaylaod
 		err = json.Unmarshal([]byte(payload), &pl)
+		if usesAggregate {
+			return PullRequestEventAggregate{pl.Header, pl.Repository, pl.PullRequest, PullRequestReviewDecisionEvent, pl}, err
+		}
 		return pl, err
 	default:
 		return nil, fmt.Errorf("unknown event %s", srcEvent)
@@ -217,7 +255,7 @@ func (hook Webhook) Parse(r *http.Request, events ...EventMatcher) (interface{},
 
 func (hook Webhook) verifySignature(r *http.Request, payload []byte) error {
 	signature := r.Header.Get("X-Src-Signature")
-	if len(signature) == 0 {
+	if signature == "" {
 		return ErrMissingSignatureHeader
 	}
 	secrets := strings.SplitSeq(hook.secret, ",")
